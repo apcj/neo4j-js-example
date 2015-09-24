@@ -11,7 +11,8 @@
   // Create a Session object to contain all Cypher activity.
   var session = new Session();
 
-  var statement = "MATCH (a {name: 'Tom Hanks'})-[ar:ACTED_IN]->(m)<-[dr:DIRECTED]-(d) RETURN a,m,d,ar,dr LIMIT 10",
+  var statement = "MATCH p = ({name: 'Tom Hanks'})-[:ACTED_IN]->()<-[:DIRECTED]-() RETURN p LIMIT 10",
+//  var statement = "MATCH (a {name: 'Tom Hanks'})-[ar:ACTED_IN]->(m)<-[dr:DIRECTED]-(d) RETURN a,m,d,ar,dr LIMIT 10",
       parameters = {};
 
   var nodes = {};
@@ -26,6 +27,15 @@
             nodes[entity.identity] = entity;
           } else if (entity instanceof Relationship) {
             relationships[entity.identity] = entity;
+          } else if (entity instanceof Path) {
+            for (var j = 0; j < entity.nodes.length; j++) {
+              var node = entity.nodes[j];
+              nodes[node.identity] = node;
+            }
+            for (var k = 0; k < entity.relationships.length; k++) {
+              var relationship = entity.relationships[k];
+              relationships[relationship.identity] = relationship;
+            }
           }
         }
       },
