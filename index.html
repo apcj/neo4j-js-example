@@ -45,7 +45,8 @@
       },
 
       function() {
-        console.log(nodes, relationships);
+        console.log('Displaying ' + d3.keys(nodes).length + ' nodes and ' +
+            d3.keys(relationships).length + ' relationships.');
         makeGraph();
       }
   );
@@ -58,6 +59,7 @@
       }
     });
 
+    var nodeColour = d3.scale.category10();
     var svg = d3.select('#viz').append('svg')
         .attr('width', 1000)
         .attr('height', 500);
@@ -65,7 +67,10 @@
     var lines = svg.selectAll('line').data(links);
     lines.enter().append('line').attr('stroke-width', 1).attr('stroke', 'black');
     var circles = svg.selectAll('circle').data(d3.values(nodes));
-    circles.enter().append('circle').attr('r', 5).attr('fill', 'blue');
+    circles.enter().append('circle').attr('r', 5).attr('fill', function(node)
+    {
+      return nodeColour(node.labels);
+    });
 
     var force = d3.layout.force();
     force.nodes(d3.values(nodes)).links(links).size([1000, 500]).on('tick', function() {
