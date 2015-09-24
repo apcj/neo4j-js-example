@@ -12,8 +12,18 @@
   var statement = "MATCH p = ()-->() RETURN p",
       parameters = {};
 
-  var nodes = {};
-  var relationships = {};
+  var nodeMap = {};
+  var relationshipMap = {};
+
+  function storeNode(node) {
+    node.radius = 5;
+    nodeMap[node.identity] = node;
+  }
+
+  function storeRelationship(relationship) {
+    relationshipMap[relationship.identity] = relationship;
+  }
+
   session.run(statement, parameters,
 
       // Called on receipt of each RECORD
@@ -21,17 +31,15 @@
         for (var i = 0; i < record.length; i++) {
           var entity = record[i];
           if (entity instanceof Node) {
-            nodes[entity.identity] = entity;
+            storeNode(entity)
           } else if (entity instanceof Relationship) {
-            relationships[entity.identity] = entity;
+            storeRelationship(entity)
           } else if (entity instanceof Path) {
             for (var j = 0; j < entity.nodes.length; j++) {
-              var node = entity.nodes[j];
-              nodes[node.identity] = node;
+              storeNode(entity.nodes[j]);
             }
             for (var k = 0; k < entity.relationships.length; k++) {
-              var relationship = entity.relationships[k];
-              relationships[relationship.identity] = relationship;
+              storeRelationship(entity.relationships[k]);
             }
           }
         }
@@ -45,17 +53,18 @@
       },
 
       function() {
-        console.log('Displaying ' + d3.keys(nodes).length + ' nodes and ' +
-            d3.keys(relationships).length + ' relationships.');
+        console.log('Displaying ' + d3.keys(nodeMap).length + ' nodes and ' +
+            d3.keys(relationshipMap).length + ' relationships.');
         makeGraph();
       }
   );
 
   function makeGraph() {
-    var links = d3.values(relationships).map(function(relationship) {
+    var nodes = d3.values(nodeMap);
+    var links = d3.values(relationshipMap).map(function(relationship) {
       return {
-        source: nodes[relationship.start],
-        target: nodes[relationship.end]
+        source: nodeMap[relationship.start],
+        target: nodeMap[relationship.end]
       }
     });
 
@@ -66,14 +75,22 @@
 
     var lines = svg.selectAll('line').data(links);
     lines.enter().append('line').attr('stroke-width', 1).attr('stroke', 'black');
-    var circles = svg.selectAll('circle').data(d3.values(nodes));
-    circles.enter().append('circle').attr('r', 5).attr('fill', function(node)
-    {
+    var circles = svg.selectAll('circle').data(nodes);
+    circles.enter().append('circle').attr('r', function(node) {
+      return node.radius;
+    }).attr('fill', function(node) {
       return nodeColour(node.labels);
     });
 
     var force = d3.layout.force();
-    force.nodes(d3.values(nodes)).links(links).size([1000, 500]).on('tick', function() {
+    force.nodes(nodes).links(links).size([1000, 500]).on('tick', function() {
+      var q = d3.geom.quadtree(nodes),
+          i = 0,
+          n = nodes.length;
+      while (++i < n) {
+        q.visit(collide(nodes[i]));
+      }
+
       circles.attr('cx', function(d) {
         return d.x;
       }).attr('cy', function(d) {
@@ -92,6 +109,31 @@
 
     circles.call(force.drag);
   }
+
+  function collide(node) {
+    var r = node.radius + 16,
+        nx1 = node.x - r,
+        nx2 = node.x + r,
+        ny1 = node.y - r,
+        ny2 = node.y + r;
+    return function(quad, x1, y1, x2, y2) {
+      if (quad.point && (quad.point !== node)) {
+        var x = node.x - quad.point.x,
+            y = node.y - quad.point.y,
+            l = Math.sqrt(x * x + y * y),
+            r = node.radius + quad.point.radius;
+        if (l < r) {
+          l = (l - r) / l * .5;
+          node.x -= x *= l;
+          node.y -= y *= l;
+          quad.point.x += x;
+          quad.point.y += y;
+        }
+      }
+      return x1 > nx2 || x2 < nx1 || y1 > ny2 || y2 < ny1;
+    };
+  }
+
 
 </script>
 </html>
