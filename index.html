@@ -1,37 +1,85 @@
 <!doctype html>
 <html>
 
-<div id="log"></div>
+<div id="log" style="display: none"></div>
+
+<div id="viz"></div>
 
 <script src="lib/neo4j.js"></script>
+<script src="lib/d3.min.js"></script>
 <script lang="javascript">
   // Create a Session object to contain all Cypher activity.
   var session = new Session();
 
-  var statement = "MERGE (a:Person {name:'Alice'}) " +
-          "MERGE (a)-[:KNOWS]->(b:Person {name:'Bob'}) " +
-          "RETURN id(a), id(b)",
+  var statement = "MATCH (a {name: 'Tom Hanks'})-[ar:ACTED_IN]->(m)<-[dr:DIRECTED]-(d) RETURN a,m,d,ar,dr LIMIT 10",
       parameters = {};
 
-  // Run a Cypher statement within an implicit transaction
+  var nodes = {};
+  var relationships = {};
   session.run(statement, parameters,
 
       // Called on receipt of each RECORD
       function(record) {
-        console.log("Values: " + record.join());
+        for (var i = 0; i < record.length; i++) {
+          var entity = record[i];
+          if (entity instanceof Node) {
+            nodes[entity.identity] = entity;
+          } else if (entity instanceof Relationship) {
+            relationships[entity.identity] = entity;
+          }
+        }
       },
 
       // Called on receipt of header summary message
       function(success, metadata) {
         if (success) {
-          console.log("Fields: " + metadata["fields"].join());
+          console.log("SUCCESS!");
         }
-        else {
-          console.log("FAILURE");
-        }
+      },
 
+      function() {
+        console.log(nodes, relationships);
+        makeGraph();
       }
-
   );
+
+  function makeGraph() {
+    var links = d3.values(relationships).map(function(relationship) {
+      return {
+        source: nodes[relationship.start],
+        target: nodes[relationship.end]
+      }
+    });
+
+    var svg = d3.select('#viz').append('svg')
+        .attr('width', 1000)
+        .attr('height', 500);
+
+    var circles = svg.selectAll('circle').data(d3.values(nodes));
+    circles.enter().append('circle').attr('r', 5).attr('fill', 'blue');
+    var lines = svg.selectAll('line').data(links);
+    lines.enter().append('line').attr('stroke-width', 1).attr('stroke', 'black');
+
+    var force = d3.layout.force();
+    force.nodes(d3.values(nodes)).links(links).size([1000, 500]).on('tick', function() {
+      circles.attr('cx', function(d) {
+        return d.x;
+      }).attr('cy', function(d) {
+        return d.y;
+      });
+      lines.attr('x1', function(d) {
+        return d.source.x;
+      }).attr('y1', function(d) {
+        return d.source.y;
+      }).attr('x2', function(d) {
+        return d.target.x;
+      }).attr('y2', function(d) {
+        return d.target.y;
+      });
+    }).start();
+
+    circles.call(force.drag);
+  }
+
 </script>
 </html>
